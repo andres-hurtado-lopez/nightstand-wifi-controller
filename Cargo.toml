@@ -1,0 +1,32 @@
+[package]
+name = "nightstand-wifi-controller"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+esp32c3_hal = {package = "esp32c3-hal",version = "0.13.0", features=["async","embassy","embassy-time-timg0"]}
+esp-backtrace = { version = "0.9.0", features = ["esp32c3", "panic-handler", "exception-handler", "print-uart"] }
+esp-println = { version = "0.7.0", features = ["esp32c3","log"] }
+log = { version = "0.4.18" }
+esp-wifi  = { version = "0.1.1", features = ["esp32c3", "wifi", "async", "embassy-net", "embedded-svc"] }
+embassy-net = { version="0.2.1", features = [
+    "nightly",
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+] }
+#smoltcp = { version = "0.10.0", default-features=false, features = ["proto-igmp", "proto-ipv4", "socket-tcp", "socket-icmp", "socket-udp", "medium-ethernet", "proto-dhcpv4", "socket-raw", "socket-dhcpv4"] }
+embedded-svc = { version = "0.26.4", default-features = false, features = [] }
+embedded-io = "0.4.0"
+embedded-io-async  = "0.6.0"
+heapless = { version = "0.7.14", default-features = false }
+embassy-sync = { version = "0.4.0" }
+embassy-futures = { version = "0.1.0" }
+embassy-executor = { version = "=0.3.2", package = "embassy-executor", features = ["nightly", "integrated-timers", "arch-riscv32", "executor-thread"] } # temporarily pin because we aren't ready for portable-atomic yet
+embassy-time = { version = "0.1.3", features = ["nightly"] }
+static_cell = { version = "=1.2", features = ["nightly"] }
+picoserve = "0.2.3"
+dnsparse = "0.3.0"
