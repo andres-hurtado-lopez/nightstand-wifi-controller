@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nightstand</title>
+
+    <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
+    <style>
+      body {background: #dedede;font-family: sans-serif;display: flex;flex-direction: column;align-items: center; color:}
+      .container{
+	  border-radius: 23px 23px 23px 23px;
+	  -moz-border-radius: 23px 23px 23px 23px;
+	  -webkit-border-radius: 23px 23px 23px 23px;
+	  border: 2px solid black;
+	  -webkit-box-shadow: 10px 10px 5px 0px rgba(0,0,0,0.75);
+	  -moz-box-shadow: 10px 10px 5px 0px rgba(0,0,0,0.75);
+	  box-shadow: 10px 10px 5px 0px rgba(0,0,0,0.75);
+	  padding:1em;
+      }
+      .actions {display:flex;gap: 0.5em;margin-bottom: 1em;}
+      a{text-decoration: none;color:black;}
+      a.btn { padding: 0.2em;border: 2px solid;border-radius: 5px;width: 4em;text-decoration:none;text-align: center;}
+      ul {list-style-type: disclosure-closed;}
+      li {padding: .4em 0 .4em 2em;border: 1px solid;width: 10em;}
+    </style>
+
+    <script>
+
+      function on()  {
+	  fetch(`/on`, {
+	      method: 'GET',
+	  }).then(x=>{
+	      console.log(`target ${x}`);
+	  });
+      }
+
+      function off()  {
+	  fetch(`/off`, {
+	      method: 'GET',
+	  }).then(x=>{
+	      console.log(`target ${x}`);
+	  });
+      }
+
+      function humidity_and_temp()  {
+	  fetch(`/humidity-and-temp`, {
+	      method: 'GET',
+	  }).then(x=>{
+	      console.log(`target ${x}`);
+	  });
+      }
+      
+
+    </script>
+    </head>
+  <body>
+    <div id="container">
+      <h1>Mesa de Noche</h1>
+      <ul class="menu_list">
+	<li onclick="on()">Encender</li>
+	<li onclick="off()">Apagar</li>
+	<li onclick="humidity_and_temp()">Temperatura y Humedad</li>
+      </ul>
+    </div>
+    </body>
+  </html>

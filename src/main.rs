@@ -2,17 +2,16 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 #![allow(dead_code)]
-use embedded_svc::wifi::{AccessPointConfiguration, Configuration, Wifi};
+use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 
 use embassy_net::tcp::TcpSocket;
-use embassy_net::udp::{PacketMetadata};
 use embassy_net::{
-    Config, IpListenEndpoint, Ipv4Address, Ipv4Cidr, Stack, StackResources, StaticConfigV4,
+    Config, IpListenEndpoint, Stack, StackResources,
 };
 use heapless::Vec;
 
 use esp_wifi::initialize;
-use esp_wifi::wifi::{WifiApDevice, WifiController, WifiState, WifiEvent, WifiDevice};
+use esp_wifi::wifi::{WifiStaDevice, WifiController, WifiState, WifiEvent, WifiDevice};
 use esp_wifi::{EspWifiInitFor};
 use static_cell::make_static;
 
@@ -46,17 +45,15 @@ static CHANNEL: Channel<CriticalSectionRawMutex, ControlMessages, 10> = Channel:
 enum ControlMessages{
     OnLight,
     OffLight,
-    ReadTemp,
-    ReadHumidity,
+    ReadTempAndHumidity,
 }
+
+const SSID: &str = "COPOLAND-PLUS";
+const PASSWORD: &str = "Nhy6bgt5vfr4.";
+
 
 #[main]
 async fn main(spawner: Spawner) {
-    // setup logger
-    // To change the log_level change the env section in .cargo/config.toml
-    // or remove it and set ESP_LOGLEVEL manually before running cargo run
-    // this requires a clean rebuild because of https://github.com/rust-lang/cargo/issues/10358
-    //esp_println::logger::init_logger_from_env();
     esp_println::logger::init_logger(log::LevelFilter::Info);
     log::info!("Nightstand WIFI Controller");
 
@@ -74,7 +71,7 @@ async fn main(spawner: Spawner) {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    let led = io.pins.gpio12.into_push_pull_output();
+    let mut led = io.pins.gpio12.into_push_pull_output();
 
     esp32c3_hal::interrupt::enable(
         esp32c3_hal::peripherals::Interrupt::GPIO,
@@ -93,15 +90,9 @@ async fn main(spawner: Spawner) {
     
     let wifi = peripherals.WIFI;
     let (wifi_interface, controller) =
-        esp_wifi::wifi::new_with_mode(&wifi_init, wifi, WifiApDevice).unwrap();
-
-    let dnss = Vec::<_,3>::from_slice(&[Ipv4Address::from_bytes(&[192, 168, 2, 1]),Ipv4Address::from_bytes(&[192, 168, 2, 1]),Ipv4Address::from_bytes(&[192, 168, 2, 1])]).unwrap();
+        esp_wifi::wifi::new_with_mode(&wifi_init, wifi, WifiStaDevice).unwrap();
     
-    let config = Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
-        gateway: Some(Ipv4Address::from_bytes(&[192, 168, 2, 150])),
-        dns_servers: dnss,
-    });
+    let config = Config::dhcpv4(Default::default());
 
     let seed = 1234; // very random, very secure seed
 
@@ -140,20 +131,11 @@ async fn main(spawner: Spawner) {
                 ),
             )
 	    .route(
-                ("/humidity",),
+                ("/humidity-and-temp",),
                 get(
                     || async move {
 			let sender = CHANNEL.sender();
-			sender.send(ControlMessages::ReadHumidity).await;
-                    },
-                ),
-            )
-	    .route(
-                ("/temp",),
-                get(
-                    || async move {
-			let sender = CHANNEL.sender();
-			sender.send(ControlMessages::ReadTemp).await;
+			sender.send(ControlMessages::ReadTempAndHumidity).await;
                     },
                 ),
             )
@@ -180,6 +162,8 @@ async fn main(spawner: Spawner) {
 	    log::error!("Failed spawning 'web_task' ID: {id} task: {why:?}");
 	}
     }
+
+    let _ = led.toggle();
 
 
 }
@@ -228,7 +212,7 @@ type AppRouter = impl picoserve::routing::PathRouter<()>;
 
 #[embassy_executor::task(pool_size = WEB_TASK_POOL_SIZE)]
 async fn web_task(
-    stack: &'static Stack<WifiDevice<'static, WifiApDevice>>,
+    stack: &'static Stack<WifiDevice<'static, WifiStaDevice>>,
     app: &'static picoserve::Router<AppRouter>,
     config: &'static picoserve::Config<Duration>,
 ){
@@ -241,11 +225,9 @@ async fn web_task(
         }
         Timer::after(Duration::from_millis(500)).await;
     }
-    log::info!("Connect to the AP `pesebre-navideño` and point your browser to http://192.168.2.1/");
-    log::info!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
     let mut socket = TcpSocket::new(&stack, &mut rx_buffer, &mut tx_buffer);
-    socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
+    socket.set_timeout(Some(embassy_time::Duration::from_secs(1)));
 
     
     loop {
@@ -299,15 +281,15 @@ async fn connection(mut controller: WifiController<'static>) {
             WifiState::ApStarted => {
                 // wait until we're no longer connected
 		log::info!("WifiState::ApStarted waiting for ap to stop");
-                controller.wait_for_event(WifiEvent::StaConnected).await;
-		log::info!("An station connected to the AP !!!!");
-                Timer::after(Duration::from_millis(100)).await
             },
 	    WifiState::StaStarted => {
 		log::info!("WifiState::StaStarted");
 	    },
 	    WifiState::StaConnected => {
 		log::info!("WifiState::StaConnected");
+		controller.wait_for_event(WifiEvent::StaDisconnected).await;
+                Timer::after(Duration::from_millis(100)).await
+
 	    },
 	    WifiState::StaDisconnected => {
 		log::info!("WifiState::StaDisconnected");
@@ -322,14 +304,24 @@ async fn connection(mut controller: WifiController<'static>) {
 		log::info!("WifiState::Invalid");
 
 		if !matches!(controller.is_started(), Ok(true)) {
-		    let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-			ssid: "pesebre-navideño".into(),
+		    let client_config = Configuration::Client(ClientConfiguration {
+			ssid: SSID.try_into().unwrap(),
+			password: PASSWORD.try_into().unwrap(),
 			..Default::default()
 		    });
 		    controller.set_configuration(&client_config).unwrap();
 		    log::info!("Starting wifi");
 		    controller.start().await.unwrap();
 		    log::info!("Wifi started!");
+		}
+
+		log::info!("About to connect to AP {SSID}...");
+		match controller.connect().await {
+		    Ok(_) => log::info!("Wifi connected!"),
+		    Err(e) => {
+			log::info!("Failed to connect to wifi: {e:?}");
+			Timer::after(Duration::from_millis(5000)).await
+		    }
 		}
 
 	    },
@@ -341,7 +333,7 @@ async fn connection(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>>) {
     log::info!("net_task before");
     stack.run().await;
     log::info!("net_task after");
