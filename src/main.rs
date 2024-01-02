@@ -71,7 +71,8 @@ async fn main(spawner: Spawner) {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    let mut led = io.pins.gpio12.into_push_pull_output();
+    let light = io.pins.gpio0.into_push_pull_output();
+    let led_wifi_connection = io.pins.gpio12.into_push_pull_output();
 
     esp32c3_hal::interrupt::enable(
         esp32c3_hal::peripherals::Interrupt::GPIO,
@@ -125,7 +126,6 @@ async fn main(spawner: Spawner) {
                 get(
                     || async move {
 			let sender = CHANNEL.sender();
-			log::info!("pause solicitado");
 			sender.send(ControlMessages::OffLight).await;
                     },
                 ),
@@ -148,11 +148,15 @@ async fn main(spawner: Spawner) {
         read_request_timeout: Some(Duration::from_secs(10)),
     });
 
-    if let Err(why) = spawner.spawn(connection(controller)) {
+    if let Err(why) = spawner.spawn(connection(controller, led_wifi_connection)) {
 	log::error!("Failed spawning 'connection' task: {why:?}");
     }
     
     if let Err(why) = spawner.spawn(net_task(&stack)) {
+	log::error!("Failed spawning 'net_task' task: {why:?}");
+    }
+
+    if let Err(why) = spawner.spawn(gpio_task(light)) {
 	log::error!("Failed spawning 'net_task' task: {why:?}");
     }
     
@@ -162,8 +166,6 @@ async fn main(spawner: Spawner) {
 	    log::error!("Failed spawning 'web_task' ID: {id} task: {why:?}");
 	}
     }
-
-    let _ = led.toggle();
 
 
 }
@@ -273,7 +275,11 @@ async fn web_task(
 
 
 #[embassy_executor::task]
-async fn connection(mut controller: WifiController<'static>) {
+async fn connection(
+    mut controller: WifiController<'static>,
+    mut led_wifi_connection: GpioPin<Output<PushPull>, 12>,
+	
+) {
     log::info!("start connection task");
     log::info!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
@@ -287,6 +293,7 @@ async fn connection(mut controller: WifiController<'static>) {
 	    },
 	    WifiState::StaConnected => {
 		log::info!("WifiState::StaConnected");
+		let _ = led_wifi_connection.set_high();
 		controller.wait_for_event(WifiEvent::StaDisconnected).await;
                 Timer::after(Duration::from_millis(100)).await
 
@@ -337,4 +344,30 @@ async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>>) {
     log::info!("net_task before");
     stack.run().await;
     log::info!("net_task after");
+}
+
+#[embassy_executor::task]
+async fn gpio_task(
+    mut light_gpio: GpioPin<Output<PushPull>, 0>,
+
+){
+
+    let receiver = CHANNEL.receiver();
+
+    loop{
+
+	match receiver.receive().await {
+	    ControlMessages::OnLight => {
+		let r = light_gpio.set_high();
+		log::info!("light on: {:?}",r);
+	    },
+	    ControlMessages::OffLight => {
+		let r = light_gpio.set_low();
+		log::info!("light off: {:?}",r);
+	    },
+	    ControlMessages::ReadTempAndHumidity => {
+	    },
+	}
+    }
+    
 }
