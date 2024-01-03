@@ -47,9 +47,14 @@
       function humidity_and_temp()  {
 	  fetch(`/humidity-and-temp`, {
 	      method: 'GET',
-	  }).then(x=>{
-	      console.log(`target ${x}`);
-	  });
+	  }).then(response=>{
+             response.json()
+	  }).then( result => {
+	     console.log(result);
+	
+	     document.getElementById("temp").innerHTML = result.temperature;
+	     document.getElementById("pres").innerHTML = result.pressure;
+	});
       }
       
 
@@ -64,5 +69,13 @@
 	<li onclick="humidity_and_temp()">Temperatura y Humedad</li>
       </ul>
     </div>
+    <div id="container">
+      <h1>Clima</h1>
+      <ul class="menu_list">
+	<li>Temperatura: <span id="temp"></span></li>
+	<li>Humedad: <span id="pres"></span></li>
+      </ul>
+    </div>
+
     </body>
   </html>

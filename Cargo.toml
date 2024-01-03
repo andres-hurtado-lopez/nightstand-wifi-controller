@@ -22,7 +22,7 @@ embassy-net = { version="0.2.1", features = [
 embedded-svc = { version = "0.26.4", default-features = false, features = [] }
 embedded-io = "0.4.0"
 embedded-io-async  = "0.6.0"
-heapless = { version = "0.7.14", default-features = false }
+#heapless = { version = "0.7.14", default-features = false }
 embassy-sync = { version = "0.4.0" }
 embassy-futures = { version = "0.1.0" }
 embassy-executor = { version = "=0.3.2", package = "embassy-executor", features = ["nightly", "integrated-timers", "arch-riscv32", "executor-thread"] } # temporarily pin because we aren't ready for portable-atomic yet
@@ -30,3 +30,5 @@ embassy-time = { version = "0.1.3", features = ["nightly"] }
 static_cell = { version = "=1.2", features = ["nightly"] }
 picoserve = "0.2.3"
 dnsparse = "0.3.0"
+bmp280-rs = "0.1.2"
+serde = { version = "1.0.194", default-features = false, features = ["derive"] }

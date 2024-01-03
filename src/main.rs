@@ -8,30 +8,34 @@ use embassy_net::tcp::TcpSocket;
 use embassy_net::{
     Config, IpListenEndpoint, Stack, StackResources,
 };
-use heapless::Vec;
 
 use esp_wifi::initialize;
 use esp_wifi::wifi::{WifiStaDevice, WifiController, WifiState, WifiEvent, WifiDevice};
 use esp_wifi::{EspWifiInitFor};
 use static_cell::make_static;
+use serde::Serialize;
 
 use embassy_executor::Spawner;
 use embassy_time::{ Duration, Timer};
 use embassy_sync::{
     channel::{Channel},
+    signal::Signal,
     blocking_mutex::raw::CriticalSectionRawMutex
 };
 
 use esp_backtrace as _;
 use esp32c3_hal::{
     gpio::{GpioPin, PushPull, Output},
+    i2c::I2C,
     clock::ClockControl,
     embassy,
     Rng,
     IO,
-    peripherals::{Peripherals},
+    peripherals::{Peripherals, I2C0},
     prelude::*
 };
+
+use embassy_futures::yield_now;
 
 use picoserve::{
     routing::{get},
@@ -40,6 +44,7 @@ use picoserve::{
 
 const WEB_TASK_POOL_SIZE : usize = 2;
 static CHANNEL: Channel<CriticalSectionRawMutex, ControlMessages, 10> = Channel::new();
+static SENSOR_SIGNAL: Signal<CriticalSectionRawMutex, SensorData> = Signal::new();
 
 #[derive(Debug)]
 enum ControlMessages{
@@ -48,8 +53,15 @@ enum ControlMessages{
     ReadTempAndHumidity,
 }
 
-const SSID: &str = "COPOLAND-PLUS";
-const PASSWORD: &str = "Nhy6bgt5vfr4.";
+#[derive(Debug, Serialize)]
+struct SensorData{
+    temperature: i32,
+    pressure: i32,
+}
+
+
+const SSID: &str = "TP-LINK_E1E082";
+const PASSWORD: &str = "11180647";
 
 
 #[main]
@@ -73,6 +85,15 @@ async fn main(spawner: Spawner) {
 
     let light = io.pins.gpio0.into_push_pull_output();
     let led_wifi_connection = io.pins.gpio12.into_push_pull_output();
+
+    let i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio4,
+        io.pins.gpio5,
+        100u32.kHz(),
+        &clocks,
+    );
+
 
     esp32c3_hal::interrupt::enable(
         esp32c3_hal::peripherals::Interrupt::GPIO,
@@ -134,8 +155,9 @@ async fn main(spawner: Spawner) {
                 ("/humidity-and-temp",),
                 get(
                     || async move {
-			let sender = CHANNEL.sender();
-			sender.send(ControlMessages::ReadTempAndHumidity).await;
+			let reading_data = SENSOR_SIGNAL.wait().await;
+
+			picoserve::response::json::Json(reading_data)
                     },
                 ),
             )
@@ -157,6 +179,10 @@ async fn main(spawner: Spawner) {
     }
 
     if let Err(why) = spawner.spawn(gpio_task(light)) {
+	log::error!("Failed spawning 'net_task' task: {why:?}");
+    }
+
+    if let Err(why) = spawner.spawn(sensor_task(i2c)) {
 	log::error!("Failed spawning 'net_task' task: {why:?}");
     }
     
@@ -271,6 +297,51 @@ async fn web_task(
         socket.close();
         socket.abort();
     }
+}
+
+#[embassy_executor::task]
+async fn sensor_task(
+    mut i2c: I2C<'static, I2C0>
+){
+
+    let sensor_address = bmp280_rs::i2c_address::I2CAddress::SdoGrounded;
+    let sensor_config  = bmp280_rs::config::Config::weather_monitoring();
+
+    let mut pressure = 0i32;
+    let mut temperature = 0i32;
+
+    
+    match  bmp280_rs::BMP280::new(
+	&mut i2c,
+	sensor_address,
+	sensor_config
+    ) {
+	Ok(mut sensor) => {
+	    loop{
+
+		if let Ok(t) = sensor.read_temperature(&mut i2c){
+		    temperature = t;
+		}
+
+		if let Ok(p) = sensor.read_pressure(&mut i2c) {
+		    pressure = p;
+		}
+
+		SENSOR_SIGNAL.signal(SensorData{temperature, pressure});
+
+		yield_now().await;
+		
+	    }
+	},
+	Err(why) => {
+	    log::error!("Failed initializing bmp280 sensor: {why}");
+	    loop {
+		SENSOR_SIGNAL.signal(SensorData{temperature:-1, pressure:-1});
+		yield_now().await;
+	    }
+	}
+    }
+
 }
 
 
