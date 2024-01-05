@@ -63,6 +63,9 @@ struct SensorData{
 const SSID: &str = "TP-LINK_E1E082";
 const PASSWORD: &str = "11180647";
 
+//Y29uc3QgU1NJRDogJnN0ciA9ICJDT1BPTEFORC1QTFVTIjs=
+//Y29uc3QgUEFTU1dPUkQ6ICZzdHIgPSAiTmh5NmJndDV2ZnI0LiI7
+
 
 #[main]
 async fn main(spawner: Spawner) {
@@ -85,12 +88,16 @@ async fn main(spawner: Spawner) {
 
     let light = io.pins.gpio0.into_push_pull_output();
     let led_wifi_connection = io.pins.gpio12.into_push_pull_output();
+    let i2c = peripherals.I2C0;
+    let sda = io.pins.gpio4;
+    let scl = io.pins.gpio5;
+    let frecuency = 100u32.kHz();
 
     let i2c = I2C::new(
-        peripherals.I2C0,
-        io.pins.gpio4,
-        io.pins.gpio5,
-        100u32.kHz(),
+        i2c,
+        sda,
+        scl,
+        frecuency,
         &clocks,
     );
 
@@ -116,7 +123,7 @@ async fn main(spawner: Spawner) {
     
     let config = Config::dhcpv4(Default::default());
 
-    let seed = 1234; // very random, very secure seed
+    let seed = 0xd95a_a7e0_1c31_9ba6; 
 
     // Init network stack
     let stack = &*make_static!(Stack::new(
@@ -327,7 +334,9 @@ async fn sensor_task(
 		    pressure = p;
 		}
 
-		SENSOR_SIGNAL.signal(SensorData{temperature, pressure});
+		let sensor_data = SensorData{temperature, pressure};
+
+		SENSOR_SIGNAL.signal(sensor_data);
 
 		yield_now().await;
 		
@@ -366,6 +375,7 @@ async fn connection(
 		log::info!("WifiState::StaConnected");
 		let _ = led_wifi_connection.set_high();
 		controller.wait_for_event(WifiEvent::StaDisconnected).await;
+		let _ = led_wifi_connection.set_low();
                 Timer::after(Duration::from_millis(100)).await
 
 	    },

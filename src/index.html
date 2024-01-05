@@ -21,9 +21,9 @@
       }
       .actions {display:flex;gap: 0.5em;margin-bottom: 1em;}
       a{text-decoration: none;color:black;}
-      a.btn { padding: 0.2em;border: 2px solid;border-radius: 5px;width: 4em;text-decoration:none;text-align: center;}
+      a.btn { padding: 0.2em;border: 2px solid;border-radius: 5px;width: 4.5em;text-decoration:none;text-align: center;}
       ul {list-style-type: disclosure-closed;}
-      li {padding: .4em 0 .4em 2em;border: 1px solid;width: 10em;}
+      li {padding: .4em 0 .4em 2em;border: 1px solid;width: 15em;}
     </style>
 
     <script>
@@ -47,13 +47,13 @@
       function humidity_and_temp()  {
 	  fetch(`/humidity-and-temp`, {
 	      method: 'GET',
-	  }).then(response=>{
-             response.json()
+	  }).then(response => {
+             if(response.ok) return response.json();
 	  }).then( result => {
 	     console.log(result);
 	
-	     document.getElementById("temp").innerHTML = result.temperature;
-	     document.getElementById("pres").innerHTML = result.pressure;
+	     document.getElementById("temp").innerHTML = `${result.temperature/100.0} C`;
+	     document.getElementById("pres").innerHTML = `${result.pressure/10000} hPa`;
 	});
       }
       
