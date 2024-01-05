@@ -45,15 +45,15 @@
       }
 
       function humidity_and_temp()  {
-	  fetch(`/humidity-and-temp`, {
+	  fetch(`/press-and-temp`, {
 	      method: 'GET',
 	  }).then(response => {
              if(response.ok) return response.json();
 	  }).then( result => {
 	     console.log(result);
 	
-	     document.getElementById("temp").innerHTML = `${result.temperature/100.0} C`;
-	     document.getElementById("pres").innerHTML = `${result.pressure/10000} hPa`;
+	     document.getElementById("temp").innerHTML = `${result.temperature} C`;
+	     document.getElementById("pres").innerHTML = `${result.pressure} hPa`;
 	});
       }
       
@@ -66,14 +66,14 @@
       <ul class="menu_list">
 	<li onclick="on()">Encender</li>
 	<li onclick="off()">Apagar</li>
-	<li onclick="humidity_and_temp()">Temperatura y Humedad</li>
+	<li onclick="humidity_and_temp()">Temperatura y Presión</li>
       </ul>
     </div>
     <div id="container">
       <h1>Clima</h1>
       <ul class="menu_list">
 	<li>Temperatura: <span id="temp"></span></li>
-	<li>Humedad: <span id="pres"></span></li>
+	<li>Presion: <span id="pres"></span></li>
       </ul>
     </div>
 

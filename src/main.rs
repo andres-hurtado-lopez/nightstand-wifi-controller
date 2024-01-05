@@ -55,17 +55,16 @@ enum ControlMessages{
 
 #[derive(Debug, Serialize)]
 struct SensorData{
-    temperature: i32,
-    pressure: i32,
+    temperature: f64,
+    pressure: f64,
 }
 
 
 const SSID: &str = "TP-LINK_E1E082";
 const PASSWORD: &str = "11180647";
 
-//Y29uc3QgU1NJRDogJnN0ciA9ICJDT1BPTEFORC1QTFVTIjs=
-//Y29uc3QgUEFTU1dPUkQ6ICZzdHIgPSAiTmh5NmJndDV2ZnI0LiI7
-
+//Y29uc3QgU1NJRDogJnN0ciA9ICJDT1BPTEFORC1QTFVTIjsKY29uc3QgUEFTU1dPUkQ6ICZzdHIg
+//PSAiTmh5NmJndDV2ZnI0LiI7CiA=
 
 #[main]
 async fn main(spawner: Spawner) {
@@ -159,7 +158,7 @@ async fn main(spawner: Spawner) {
                 ),
             )
 	    .route(
-                ("/humidity-and-temp",),
+                ("/press-and-temp",),
                 get(
                     || async move {
 			let reading_data = SENSOR_SIGNAL.wait().await;
@@ -311,40 +310,40 @@ async fn sensor_task(
 ){
 
     let sensor_address = bmp280_rs::i2c_address::I2CAddress::SdoGrounded;
-    let sensor_config  = bmp280_rs::config::Config::weather_monitoring();
+    let sensor_config  = bmp280_rs::config::Config::handheld_device_lowpower();
 
-    let mut pressure = 0i32;
-    let mut temperature = 0i32;
+    let mut pressure = 0f64;
+    let mut temperature = 0f64;
 
     
     match  bmp280_rs::BMP280::new(
 	&mut i2c,
 	sensor_address,
 	sensor_config
-    ) {
+    ).and_then(|x| x.into_normal_mode(&mut i2c) ) {
 	Ok(mut sensor) => {
 	    loop{
 
 		if let Ok(t) = sensor.read_temperature(&mut i2c){
-		    temperature = t;
+		    temperature = t as f64 / 100 as f64;
 		}
 
 		if let Ok(p) = sensor.read_pressure(&mut i2c) {
-		    pressure = p;
+		    pressure = p.into();
 		}
 
 		let sensor_data = SensorData{temperature, pressure};
 
 		SENSOR_SIGNAL.signal(sensor_data);
 
-		yield_now().await;
+		Timer::after(Duration::from_millis(2000)).await;
 		
 	    }
 	},
 	Err(why) => {
 	    log::error!("Failed initializing bmp280 sensor: {why}");
 	    loop {
-		SENSOR_SIGNAL.signal(SensorData{temperature:-1, pressure:-1});
+		SENSOR_SIGNAL.signal(SensorData{temperature:-1.0, pressure:-1.0});
 		yield_now().await;
 	    }
 	}
