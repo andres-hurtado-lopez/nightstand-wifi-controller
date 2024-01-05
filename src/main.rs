@@ -163,7 +163,6 @@ async fn main(spawner: Spawner) {
                 get(
                     || async move {
 			let reading_data = SENSOR_SIGNAL.wait().await;
-
 			picoserve::response::json::Json(reading_data)
                     },
                 ),
