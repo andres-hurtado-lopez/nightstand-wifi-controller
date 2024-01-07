@@ -1326,7 +1326,7 @@
     (property "Value" "PN2222A" (at 102.87 43.18 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Footprint" "Package_TO_SOT_THT_AKL:TO-92_Inline_Wide_EBC" (at 102.87 46.99 0)
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_HandSolder" (at 102.87 46.99 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "https://www.tme.eu/Document/6fc4d4bda1f7e53502c9939019a00d3f/PN2222ABU.pdf" (at 107.95 44.45 0)
